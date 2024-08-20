@@ -1,0 +1,24 @@
+name: Put Conscia Preview Environment 
+
+on: 
+  workflow_dispatch
+
+env:
+  ENVIRONMENT_CODE: 'preview'
+  DEST_CONSCIA_SERVER: 'engine-staging'
+
+jobs:
+  put-config:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: PUT DX Engine Config back into an Environment
+        run: .github/scripts/put-env.sh
+        env:
+          ENVIRONMENT_CODE: ${{ env.ENVIRONMENT_CODE }}
+          CUSTOMER_CODE: ${{ vars.CUSTOMER_CODE }}
+          CONSCIA_TOKEN: ${{ secrets.CONSCIA_TOKEN }}
+          CONSCIA_SERVER: ${{ env.DEST_CONSCIA_SERVER }}
+          INPUT_FILE: ${{ env.ENVIRONMENT_CODE }}-env.json
