@@ -1,0 +1,38 @@
+name: Get Conscia Preview Environment
+
+on: 
+  workflow_dispatch
+
+env:
+  ENVIRONMENT_CODE: 'preview'
+  SRC_CONSCIA_SERVER: 'engine-staging'
+
+jobs:
+  get-config:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Get current date
+        run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+
+      - name: GET DX Engine Config from an Environment
+        run: .github/scripts/get-env.sh
+        env:
+          ENVIRONMENT_CODE: ${{ env.ENVIRONMENT_CODE }}
+          CUSTOMER_CODE: ${{ vars.CUSTOMER_CODE }}
+          CONSCIA_TOKEN: ${{ secrets.CONSCIA_TOKEN }}
+          CONSCIA_SERVER: ${{ env.SRC_CONSCIA_SERVER }}
+          OUTPUT_FILE: ${{ env.ENVIRONMENT_CODE }}-env.json
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6.1.0
+        with:
+          file-path: ${{ env.ENVIRONMENT_CODE }}-env.json
+          branch: update-${{ env.ENVIRONMENT_CODE }}
+          branch-suffix: timestamp
+          title: Import of Conscia configuration from ${{ env.ENVIRONMENT_CODE }} on ${{ env.DATE }}
+          body: The latest environment configuration was retrieved from ${{ env.SRC_CONSCIA_SERVER}}/${{ env.ENVIRONMENT_CODE }} and committed to this repository.
+          commit-message: Retrieved updated environment from ${{ env.ENVIRONMENT_CODE }} on ${{ env.DATE }}.
+          token: ${{ secrets.GH_TOKEN }}
