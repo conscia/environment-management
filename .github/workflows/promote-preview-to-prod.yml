@@ -1,0 +1,92 @@
+name: Promote Conscia Preview Environment to Production
+
+on: 
+  workflow_dispatch
+
+env:
+  SRC_ENVIRONMENT_CODE: 'preview'
+  SRC_CONSCIA_SERVER: 'engine-staging'
+
+  DEST_ENVIRONMENT_CODE: 'production'
+  DEST_CONSCIA_SERVER: 'engine-staging'
+
+jobs:
+  get-config-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Get current date
+        run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+
+      - name: GET DX Engine Config from Preview Environment
+        run: .github/scripts/get-env.sh
+        env:
+          ENVIRONMENT_CODE: ${{ env.SRC_ENVIRONMENT_CODE }}
+          CUSTOMER_CODE: ${{ vars.CUSTOMER_CODE }}
+          CONSCIA_TOKEN: ${{ secrets.CONSCIA_TOKEN }}
+          CONSCIA_SERVER: ${{ env.SRC_CONSCIA_SERVER }}
+          OUTPUT_FILE: ${{ env.SRC_ENVIRONMENT_CODE }}-env.json
+
+      - name: Create Pull Request for Preview
+        uses: peter-evans/create-pull-request@v6.1.0
+        id: create_PR
+        with:
+          file-path: ${{ env.SRC_ENVIRONMENT_CODE }}-env.json
+          branch: update-${{ env.SRC_ENVIRONMENT_CODE }}
+          branch-suffix: timestamp
+          title: Import of Conscia configuration from ${{ env.SRC_ENVIRONMENT_CODE }} on ${{ env.DATE }}
+          body: The latest environment configuration was retrieved from ${{ env.SRC_CONSCIA_SERVER}}/${{ env.SRC_ENVIRONMENT_CODE }} and committed to this repository.
+          commit-message: Retrieved updated environment from ${{ env.SRC_ENVIRONMENT_CODE }} on ${{ env.DATE }}.
+          token: ${{ secrets.GH_TOKEN }}
+    outputs: 
+      pull-request-branch: ${{ steps.create_PR.outputs.pull-request-branch }}
+          
+  put-config-production:
+    runs-on: ubuntu-latest
+    needs: get-config-preview
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.1.7
+        with:
+          ref: ${{ needs.get-config-preview.outputs.pull-request-branch }}
+
+      - name: PUT Preview DX Engine Config into Production
+        run: .github/scripts/put-env.sh
+        env:
+          ENVIRONMENT_CODE: ${{ env.DEST_ENVIRONMENT_CODE }}
+          CUSTOMER_CODE: ${{ vars.CUSTOMER_CODE }}
+          CONSCIA_TOKEN: ${{ secrets.CONSCIA_TOKEN }}
+          CONSCIA_SERVER: ${{ env.DEST_CONSCIA_SERVER }}
+          INPUT_FILE: ${{ env.SRC_ENVIRONMENT_CODE }}-env.json
+
+  commit-config-production:
+    runs-on: ubuntu-latest
+    needs: [get-config-preview, put-config-production]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Get current date
+        run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+
+      - name: GET DX Engine Config from Production Environment
+        run: .github/scripts/get-env.sh
+        env:
+          ENVIRONMENT_CODE: ${{ env.DEST_ENVIRONMENT_CODE }}
+          CUSTOMER_CODE: ${{ vars.CUSTOMER_CODE }}
+          CONSCIA_TOKEN: ${{ secrets.CONSCIA_TOKEN }}
+          CONSCIA_SERVER: ${{ env.DEST_CONSCIA_SERVER }}
+          OUTPUT_FILE: ${{ env.DEST_ENVIRONMENT_CODE }}-env.json
+
+      - name: Create Pull Request for Production
+        uses: peter-evans/create-pull-request@v6.1.0
+        with:
+          file-path: ${{ env.DEST_ENVIRONMENT_CODE }}-env.json
+          branch: update-${{ env.DEST_ENVIRONMENT_CODE }}
+          branch-suffix: timestamp
+          title: Import of Conscia configuration from ${{ env.DEST_ENVIRONMENT_CODE }} on ${{ env.DATE }}
+          body: The latest environment configuration was retrieved from ${{ env.DEST_CONSCIA_SERVER}}/${{ env.DEST_ENVIRONMENT_CODE }} and committed to this repository.
+          commit-message: Retrieved updated environment from ${{ env.DEST_ENVIRONMENT_CODE }} on ${{ env.DATE }}.
+          token: ${{ secrets.GH_TOKEN }}
